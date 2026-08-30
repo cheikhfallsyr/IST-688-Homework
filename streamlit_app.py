@@ -32,6 +32,16 @@ else:
     uploaded_file = st.file_uploader(
         "Upload a document (.pdf or .txt)", type=("pdf", "txt")
     )
+    # select a model
+    model_name = st.selectbox(
+        "Select a model",
+        (
+            "gpt-3.5-turbo",
+            "gpt-4.1",
+            "gpt-5-chat-latest",
+            "gpt-5-nano",
+        ),
+    )
 
     # Ask the user for a question via `st.text_area`.
     question = st.text_area(
@@ -61,7 +71,7 @@ else:
 
         # Generate an answer using the OpenAI API.
         stream = client.chat.completions.create(
-            model="gpt-5-nano",
+            model=model_name,
             messages=messages,
             stream=True,
         )
