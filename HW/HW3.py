@@ -114,7 +114,7 @@ if prompt := st.chat_input("Ask a question about the URL content"):
             ] + conversation_buffer
 
             stream = client.chat.completions.create(
-                model="gpt-5.6-terra",
+                model="gpt-6-astra",
                 messages=messages_for_model,
                 stream=True,
             )
@@ -127,7 +127,7 @@ if prompt := st.chat_input("Ask a question about the URL content"):
             )
 
             with client.messages.stream(
-                model="claude-sonnet-5",
+                model="claude-fable-5-1",
                 max_tokens=1024,
                 system=system_prompt,
                 messages=conversation_buffer,
