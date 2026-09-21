@@ -5,7 +5,7 @@ st.title("HW Manager")
 hw1 = st.Page("HW/HW1.py", title="HW 1")
 hw2 = st.Page("HW/HW2.py", title="HW 2")
 hw3 = st.Page("HW/HW3.py", title="HW 3")
-hw4 = st.Page("HW/HW4.py", title="HW 4", default=True)
+hw4 = st.Page("HW/HW4.py", title="HW 4")
 
 
 
