@@ -169,7 +169,7 @@ def create_vector_database():
 
     if collection.count() == 0:
         load_html_to_collection(
-            "./su_orgs/",
+            "./HW/su_orgs/",
             collection,
         )
 
