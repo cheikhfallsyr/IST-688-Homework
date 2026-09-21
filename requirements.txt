@@ -4,3 +4,7 @@ anthropic
 requests
 beautifulsoup4
 pypdf
+chromadb
+pysqlite3-binary
+PyPDF2
+protobuf==3.20
