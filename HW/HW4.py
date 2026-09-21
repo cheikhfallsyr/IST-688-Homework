@@ -1,22 +1,30 @@
-import streamlit as st
-from openai import OpenAI
-from bs4 import BeautifulSoup
 import sys
 from pathlib import Path
 
+import streamlit as st
+from openai import OpenAI
+from bs4 import BeautifulSoup
 
-__import__("pysqlite3")
-sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+
+# Use pysqlite3 when it is available on Streamlit Community Cloud.
+# Codespaces can use Python's normal sqlite3 module if it is unavailable.
+try:
+    __import__("pysqlite3")
+    sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+except ImportError:
+    pass
 
 import chromadb
 
 
+# Create the OpenAI client.
 if "openai_client" not in st.session_state:
     st.session_state.openai_client = OpenAI(
         api_key=st.secrets.OPENAI_API_KEY
     )
 
 
+# Create embeddings and add the HTML chunks to ChromaDB.
 def add_to_collection(
     collection,
     documents,
@@ -26,8 +34,12 @@ def add_to_collection(
     client = st.session_state.openai_client
     embeddings = []
 
+    # Process 100 chunks at a time because the folder contains
+    # hundreds of HTML files.
     for batch_start in range(0, len(documents), 100):
-        batch = documents[batch_start:batch_start + 100]
+        batch = documents[
+            batch_start:batch_start + 100
+        ]
 
         response = client.embeddings.create(
             input=batch,
@@ -46,22 +58,35 @@ def add_to_collection(
     )
 
 
-# Extract readable text from one HTML file
+# Extract readable text from one HTML file.
 def extract_text_from_html(html_path):
-    with open(html_path, "r", encoding="utf-8") as html_file:
-        soup = BeautifulSoup(html_file, "html.parser")
+    with open(
+        html_path,
+        "r",
+        encoding="utf-8",
+    ) as html_file:
+        soup = BeautifulSoup(
+            html_file,
+            "html.parser",
+        )
 
+    # Remove code that does not contain useful organization information.
     for element in soup(["script", "style"]):
         element.decompose()
 
     return " ".join(
-        soup.get_text(" ", strip=True).split()
+        soup.get_text(
+            " ",
+            strip=True,
+        ).split()
     )
 
 
-# Chunking method: split the words in each HTML document at the midpoint.
-# This creates exactly two similarly sized mini-documents, as required by
-# the homework, while keeping both halves small enough for retrieval.
+# Chunking method:
+# Each document is divided at the midpoint of its words.
+# This method was chosen because the homework requires exactly two
+# mini-documents for every HTML file. It also creates two chunks that
+# are approximately the same size.
 def chunk_document(text):
     words = text.split()
     midpoint = (len(words) + 1) // 2
@@ -72,7 +97,11 @@ def chunk_document(text):
     ]
 
 
-def load_html_to_collection(folder_path, collection):
+# Load every HTML file and create two chunks per file.
+def load_html_to_collection(
+    folder_path,
+    collection,
+):
     folder = Path(folder_path)
 
     html_files = sorted(
@@ -82,7 +111,7 @@ def load_html_to_collection(folder_path, collection):
 
     if not html_files:
         st.error(
-            "The HW-04-Data folder must contain the provided HTML files."
+            "The su_orgs folder must contain the provided HTML files."
         )
         st.stop()
 
@@ -91,7 +120,9 @@ def load_html_to_collection(folder_path, collection):
     metadatas = []
 
     for html_file in html_files:
-        text = extract_text_from_html(html_file)
+        text = extract_text_from_html(
+            html_file
+        )
 
         if not text:
             continue
@@ -123,42 +154,49 @@ def load_html_to_collection(folder_path, collection):
         metadatas,
     )
 
-    return len(html_files)
 
-
+# Create the persistent database only if it is empty.
 def create_vector_database():
     chroma_client = chromadb.PersistentClient(
         path="./ChromaDB_for_HW4"
     )
 
-    collection = chroma_client.get_or_create_collection(
-        "HW4Collection"
+    collection = (
+        chroma_client.get_or_create_collection(
+            "HW4Collection"
+        )
     )
 
     if collection.count() == 0:
         load_html_to_collection(
-            "./HW-04-Data/",
+            "./su_orgs/",
             collection,
         )
 
-    st.session_state.HW4_VectorDB = collection
+    st.session_state.HW4_VectorDB = (
+        collection
+    )
 
 
 if "HW4_VectorDB" not in st.session_state:
     with st.spinner(
-        "Creating the student organization vector database..."
+        "Creating the student organization database..."
     ):
         create_vector_database()
 
 
 #### MAIN APP ####
-st.title("HW 4: iSchool Student Organization Chatbot")
+
+st.title(
+    "HW 4: iSchool Student Organization Chatbot"
+)
 
 st.write(
-    "Ask a question about the student organizations in the provided pages."
+    "Ask a question about Syracuse University student organizations."
 )
 
 
+# Create the conversation history.
 if "hw4_messages" not in st.session_state:
     st.session_state.hw4_messages = [
         {
@@ -171,11 +209,17 @@ if "hw4_messages" not in st.session_state:
     ]
 
 
+# Display previous messages.
 for message in st.session_state.hw4_messages:
-    with st.chat_message(message["role"]):
-        st.write(message["content"])
+    with st.chat_message(
+        message["role"]
+    ):
+        st.write(
+            message["content"]
+        )
 
 
+# Get the user's next message.
 if prompt := st.chat_input(
     "Ask about a student organization"
 ):
@@ -189,23 +233,34 @@ if prompt := st.chat_input(
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    client = st.session_state.openai_client
+    client = (
+        st.session_state.openai_client
+    )
 
+    # Create an embedding for the user's question.
     response = client.embeddings.create(
         input=prompt,
         model="text-embedding-3-small",
     )
 
-    query_embedding = response.data[0].embedding
-
-    results = st.session_state.HW4_VectorDB.query(
-        query_embeddings=[query_embedding],
-        n_results=min(
-            3,
-            st.session_state.HW4_VectorDB.count(),
-        ),
+    query_embedding = (
+        response.data[0].embedding
     )
 
+    # Retrieve the three closest chunks.
+    results = (
+        st.session_state.HW4_VectorDB.query(
+            query_embeddings=[
+                query_embedding
+            ],
+            n_results=min(
+                3,
+                st.session_state.HW4_VectorDB.count(),
+            ),
+        )
+    )
+
+    # Combine the retrieved chunks for the LLM.
     rag_context = "\n\n---\n\n".join(
         (
             f"Source: {metadata['source_file']} "
@@ -221,16 +276,20 @@ if prompt := st.chat_input(
     system_message = {
         "role": "system",
         "content": (
-            "You are a helpful iSchool student organization chatbot. "
-            "Answer the user's question using only the retrieved student "
-            "organization pages below. Name the source HTML file or files "
-            "used in the answer. If the answer is not in the retrieved "
-            "pages, say that you could not find it. Do not make up "
-            "information.\n\nRetrieved pages:\n\n"
+            "You are a helpful Syracuse University "
+            "student organization chatbot. Answer the "
+            "user's question using only the retrieved "
+            "organization pages below. Name the source "
+            "HTML file or files used in your answer. "
+            "If the information is unavailable, say that "
+            "you could not find it. Do not make up "
+            "information.\n\n"
+            "Retrieved organization pages:\n\n"
             + rag_context
         ),
     }
 
+    # Keep no more than the last five interactions.
     user_message_indexes = [
         index
         for index, message in enumerate(
@@ -246,21 +305,30 @@ if prompt := st.chat_input(
     )
 
     conversation_buffer = (
-        st.session_state.hw4_messages[buffer_start:]
+        st.session_state.hw4_messages[
+            buffer_start:
+        ]
     )
 
     messages_for_model = [
         system_message
     ] + conversation_buffer
 
-    stream = client.chat.completions.create(
-        model="gpt-5-mini",
-        messages=messages_for_model,
-        stream=True,
+    # Generate and stream the response.
+    stream = (
+        client.chat.completions.create(
+            model="gpt-5-mini",
+            messages=messages_for_model,
+            stream=True,
+        )
     )
 
-    with st.chat_message("assistant"):
-        answer = st.write_stream(stream)
+    with st.chat_message(
+        "assistant"
+    ):
+        answer = st.write_stream(
+            stream
+        )
 
     st.session_state.hw4_messages.append(
         {
